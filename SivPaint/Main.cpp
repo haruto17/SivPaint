@@ -1,96 +1,84 @@
 ﻿# include <Siv3D.hpp> // OpenSiv3D v0.6.9
 
+Image MakeImage()
+{
+	return Image{ 600,600,Color{ 63, 127, 255 } };
+}
+
+
 void Main()
 {
-	// 背景の色を設定する | Set the background color
-	Scene::SetBackground(ColorF{ 0.6, 0.8, 0.7 });
+	// ウインドウサイズの変更
+	Window::Resize(1000, 600);
 
-	// 画像ファイルからテクスチャを作成する | Create a texture from an image file
-	const Texture texture{ U"example/windmill.png" };
+	// キャンバスのサイズ
+	constexpr Size canvasSize{ 600,600 };
 
-	// 絵文字からテクスチャを作成する | Create a texture from an emoji
-	const Texture emoji{ U"🦖"_emoji };
+	// ペンの太さ
+	double thickness = 5;
 
-	// 太文字のフォントを作成する | Create a bold font with MSDF method
-	const Font font{ FontMethod::MSDF, 48, Typeface::Bold };
+	// ペンの色
+	HSV penColor = Palette::Orange;
 
-	// テキストに含まれる絵文字のためのフォントを作成し、font に追加する | Create a font for emojis in text and add it to font as a fallback
-	const Font emojiFont{ 48, Typeface::ColorEmoji };
-	font.addFallback(emojiFont);
+	// 書き込み用の画像データを用意
+	Image image{ canvasSize,Palette::White };
 
-	// ボタンを押した回数 | Number of button presses
-	int32 count = 0;
-
-	// チェックボックスの状態 | Checkbox state
-	bool checked = false;
-
-	// プレイヤーの移動スピード | Player's movement speed
-	double speed = 200.0;
-
-	// プレイヤーの X 座標 | Player's X position
-	double playerPosX = 400;
-
-	// プレイヤーが右を向いているか | Whether player is facing right
-	bool isPlayerFacingRight = true;
+	// 表示用のテクスチャ（内容を更新するのでDynamicTexture）
+	DynamicTexture texture{ image };
 
 	while (System::Update())
 	{
-		// テクスチャを描く | Draw the texture
-		texture.draw(20, 20);
+		SimpleGUI::Headline(U"Color", Vec2{ 650,10 });
+		SimpleGUI::ColorPicker(penColor, Vec2{ 650,50 });
 
-		// テキストを描く | Draw text
-		font(U"Hello, Siv3D!🎮").draw(64, Vec2{ 20, 340 }, ColorF{ 0.2, 0.4, 0.8 });
+		SimpleGUI::Headline(U"Thickness", Vec2{ 650,200 });
+		SimpleGUI::Slider(U"{:.2f}"_fmt(thickness), thickness, 1.0, 10.0, Vec2{ 650,240 });
 
-		// 指定した範囲内にテキストを描く | Draw text within a specified area
-		font(U"Siv3D (シブスリーディー) は、ゲームやアプリを楽しく簡単な C++ コードで開発できるフレームワークです。")
-			.draw(18, Rect{ 20, 430, 480, 200 }, Palette::Black);
-
-		// 長方形を描く | Draw a rectangle
-		Rect{ 540, 20, 80, 80 }.draw();
-
-		// 角丸長方形を描く | Draw a rounded rectangle
-		RoundRect{ 680, 20, 80, 200, 20 }.draw(ColorF{ 0.0, 0.4, 0.6 });
-
-		// 円を描く | Draw a circle
-		Circle{ 580, 180, 40 }.draw(Palette::Seagreen);
-
-		// 矢印を描く | Draw an arrow
-		Line{ 540, 330, 760, 260 }.drawArrow(8, SizeF{ 20, 20 }, ColorF{ 0.4 });
-
-		// 半透明の円を描く | Draw a semi-transparent circle
-		Circle{ Cursor::Pos(), 40 }.draw(ColorF{ 1.0, 0.0, 0.0, 0.5 });
-
-		// ボタン | Button
-		if (SimpleGUI::Button(U"count: {}"_fmt(count), Vec2{ 520, 370 }, 120, (checked == false)))
-		{
-			// カウントを増やす | Increase the count
-			++count;
+		SimpleGUI::Headline(U"Tool", Vec2{ 900,10 });
+		if (SimpleGUI::Button(U"Fill", Vec2{ 900,60 })) {
+			image.fill(penColor);
+			texture.fill(image);
 		}
 
-		// チェックボックス | Checkbox
-		SimpleGUI::CheckBox(checked, U"Lock \U000F033E", Vec2{ 660, 370 }, 120);
-
-		// スライダー | Slider
-		SimpleGUI::Slider(U"speed: {:.1f}"_fmt(speed), speed, 100, 400, Vec2{ 520, 420 }, 140, 120);
-
-		// 左キーが押されていたら | If left key is pressed
-		if (KeyLeft.pressed())
+		// Eキーで消しゴム
+		if (KeyE.pressed())
 		{
-			// プレイヤーが左に移動する | Player moves left
-			playerPosX = Max((playerPosX - speed * Scene::DeltaTime()), 60.0);
-			isPlayerFacingRight = false;
+			penColor = Palette::White;
 		}
 
-		// 右キーが押されていたら | If right key is pressed
-		if (KeyRight.pressed())
+		if (MouseL.pressed())
 		{
-			// プレイヤーが右に移動する | Player moves right
-			playerPosX = Min((playerPosX + speed * Scene::DeltaTime()), 740.0);
-			isPlayerFacingRight = true;
+			// 書き込む線の始点は直前のフレームのマウスカーソル座標
+			// （初回はタッチ操作時の座標のジャンプを防ぐため、現在のマウスカーソル座標にする）
+			const Point from = (MouseL.down() ? Cursor::Pos() : Cursor::PreviousPos());
+
+			// 書き込む線の終点は現在のマウスカーソル座標
+			const Point to = Cursor::Pos();
+
+			// image に線を書き込む
+			Line{ from, to }.overwrite(image, thickness, penColor);
+
+			// 書き込み終わった image でテクスチャを更新
+			texture.fill(image);
+		}
+		// 描いたものを消去するボタンが押されたら
+		if (SimpleGUI::Button(U"Clear", Vec2{ 650, 300 }, 120))
+		{
+			// 画像を白で塗りつぶす
+			image.fill(Palette::White);
+
+			// 塗りつぶし終わった image でテクスチャを更新
+			texture.fill(image);
 		}
 
-		// プレイヤーを描く | Draw the player
-		emoji.scaled(0.75).mirrored(isPlayerFacingRight).drawAt(playerPosX, 540);
+		// Saveボタンが押されたら画像を保存
+		if (SimpleGUI::Button(U"Save", Vec2{ 650,360 }, 120))
+		{
+			image.save(U"image1.png");
+		}
+
+		// テクスチャを表示
+		texture.draw();
 	}
 }
 

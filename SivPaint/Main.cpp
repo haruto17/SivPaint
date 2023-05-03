@@ -74,7 +74,7 @@ void Main()
 		// Saveボタンが押されたら画像を保存
 		if (SimpleGUI::Button(U"Save", Vec2{ 650,360 }, 120))
 		{
-			image.save(U"image1.png");
+			image.saveWithDialog();
 		}
 
 		// テクスチャを表示
